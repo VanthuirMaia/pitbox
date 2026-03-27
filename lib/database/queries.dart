@@ -175,10 +175,15 @@ Future<Map<String, dynamic>> resumoPeriodo(String dataInicio, String dataFim) as
     SELECT 
       COUNT(*) as total_turnos,
       COALESCE(SUM(ganho_bruto), 0) as ganho_total,
-      COALESCE(SUM(km_final - km_inicial), 0) as km_total,
-      COALESCE(
-        SUM((julianday(fim_em) - julianday(inicio_em)) * 24), 0
-      ) as horas_total
+      COALESCE(SUM(
+        CASE WHEN km_final IS NOT NULL AND km_inicial IS NOT NULL 
+        THEN km_final - km_inicial ELSE 0 END
+      ), 0) as km_total,
+      COALESCE(SUM(
+        CASE WHEN fim_em IS NOT NULL 
+        THEN (strftime('%s', fim_em) - strftime('%s', inicio_em)) / 3600.0
+        ELSE 0 END
+      ), 0) as horas_total
     FROM turno 
     WHERE status = 'finalizado'
       AND date(inicio_em) BETWEEN ? AND ?

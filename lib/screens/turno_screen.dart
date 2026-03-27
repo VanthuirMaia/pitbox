@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../database/queries.dart';
 import '../services/gps.dart';
@@ -20,6 +21,7 @@ class TurnoScreen extends StatefulWidget {
 }
 
 class _TurnoScreenState extends State<TurnoScreen> {
+  Timer? _timer;
   Map<String, dynamic>? turnoAtivo;
   bool rastreando = false;
   final kmInicialCtrl = TextEditingController();
@@ -31,12 +33,15 @@ class _TurnoScreenState extends State<TurnoScreen> {
   void initState() {
     super.initState();
     carregarEstado();
-    // atualiza duração a cada minuto
-    Stream.periodic(const Duration(minutes: 1)).listen((_) => atualizarDuracao());
+    // atualiza duração a cada 30 segundos
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (turnoAtivo != null) atualizarDuracao();
+    });
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
     kmInicialCtrl.dispose();
     kmFinalCtrl.dispose();
     ganhoBrutoCtrl.dispose();
