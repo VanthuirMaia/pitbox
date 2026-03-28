@@ -2,17 +2,18 @@ import 'schema.dart';
 
 // ── TURNO ──────────────────────────────────────────────
 
-Future<int> iniciarTurno({double? kmInicial}) async {
+Future<int> iniciarTurno({double? kmInicial, String? plataforma}) async {
   final db = await getDb();
   final agora = DateTime.now().toIso8601String();
   return await db.insert('turno', {
     'inicio_em': agora,
     'km_inicial': kmInicial,
     'status': 'ativo',
+    'plataforma': plataforma,
   });
 }
 
-Future<void> finalizarTurno(int turnoId, {double? kmFinal, double? ganhoBruto}) async {
+Future<void> finalizarTurno(int turnoId, {double? kmFinal, double? ganhoBruto, int? totalCorridas}) async {
   final db = await getDb();
   final agora = DateTime.now().toIso8601String();
   await db.update(
@@ -22,6 +23,7 @@ Future<void> finalizarTurno(int turnoId, {double? kmFinal, double? ganhoBruto}) 
       'km_final': kmFinal,
       'ganho_bruto': ganhoBruto ?? 0,
       'status': 'finalizado',
+      'total_corridas': totalCorridas,
     },
     where: 'id = ?',
     whereArgs: [turnoId],
@@ -190,4 +192,48 @@ Future<Map<String, dynamic>> resumoPeriodo(String dataInicio, String dataFim) as
   ''', [dataInicio, dataFim]);
 
   return result.first;
+}
+
+// migração: adiciona colunas novas sem perder dados
+Future<void> migrarBanco() async {
+  final db = await getDb();
+  try {
+    await db.execute('ALTER TABLE turno ADD COLUMN plataforma TEXT');
+  } catch (_) {}
+  try {
+    await db.execute('ALTER TABLE turno ADD COLUMN total_corridas INTEGER');
+  } catch (_) {}
+  try {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS turno_plataforma (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        turno_id INTEGER NOT NULL,
+        plataforma TEXT NOT NULL,
+        corridas INTEGER DEFAULT 0,
+        ganho REAL DEFAULT 0,
+        FOREIGN KEY (turno_id) REFERENCES turno(id)
+      )
+    ''');
+  } catch (_) {}
+}
+
+// salva ganho por plataforma
+Future<void> salvarGanhoPorPlataforma(int turnoId, String plataforma, int corridas, double ganho) async {
+  final db = await getDb();
+  await db.insert('turno_plataforma', {
+    'turno_id': turnoId,
+    'plataforma': plataforma,
+    'corridas': corridas,
+    'ganho': ganho,
+  });
+}
+
+// busca ganhos por plataforma de um turno
+Future<List<Map<String, dynamic>>> buscarGanhosPorPlataforma(int turnoId) async {
+  final db = await getDb();
+  return await db.query(
+    'turno_plataforma',
+    where: 'turno_id = ?',
+    whereArgs: [turnoId],
+  );
 }

@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'services/gps.dart';
+import 'services/tema.dart';
+import 'database/queries.dart';
 import 'screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // inicializa serviço de background
+
   await inicializarServicoBackground();
-  
-  // força orientação portrait
+  await migrarBanco();
+  await carregarTema();
+
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  
-  // barra de status escura
+
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Color(0xFF0D0D0D),
+    statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
 
@@ -26,18 +27,34 @@ class PitBoxApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'PitBox',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        scaffoldBackgroundColor: const Color(0xFF0D0D0D),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFE8FF00),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
-      home: const HomeScreen(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: temaNotifier,
+      builder: (context, modo, _) {
+        return MaterialApp(
+          title: 'PitBox',
+          debugShowCheckedModeBanner: false,
+          themeMode: modo,
+          theme: ThemeData(
+            brightness: Brightness.light,
+            scaffoldBackgroundColor: CoresClaro.bg,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: CoresClaro.amarelo,
+              brightness: Brightness.light,
+            ),
+            useMaterial3: true,
+          ),
+          darkTheme: ThemeData(
+            brightness: Brightness.dark,
+            scaffoldBackgroundColor: CoresEscuro.bg,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: CoresEscuro.amarelo,
+              brightness: Brightness.dark,
+            ),
+            useMaterial3: true,
+          ),
+          home: const HomeScreen(),
+        );
+      },
     );
   }
 }

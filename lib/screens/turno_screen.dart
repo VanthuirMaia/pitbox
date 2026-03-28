@@ -3,15 +3,9 @@ import 'package:flutter/material.dart';
 import '../database/queries.dart';
 import '../services/gps.dart';
 import '../services/calculos.dart';
+import '../services/tema.dart';
 
-const _bg = Color(0xFF0D0D0D);
-const _card = Color(0xFF161616);
-const _borda = Color(0xFF222222);
-const _amarelo = Color(0xFFE8FF00);
-const _branco = Color(0xFFF5F5F5);
-const _cinza = Color(0xFF666666);
-const _verde = Color(0xFF44FF88);
-const _vermelho = Color(0xFFFF4444);
+const _plataformas = ['99', 'Uber', 'InDriver', 'Particular', 'Outro'];
 
 class TurnoScreen extends StatefulWidget {
   const TurnoScreen({super.key});
@@ -26,14 +20,17 @@ class _TurnoScreenState extends State<TurnoScreen> {
   bool rastreando = false;
   final kmInicialCtrl = TextEditingController();
   final kmFinalCtrl = TextEditingController();
-  final ganhoBrutoCtrl = TextEditingController();
   String duracao = '';
+
+  // ganho por plataforma
+  final Map<String, TextEditingController> ganhoCtrl = {};
+  final Map<String, TextEditingController> corridasCtrl = {};
+  final List<String> plataformasSelecionadas = [];
 
   @override
   void initState() {
     super.initState();
     carregarEstado();
-    // atualiza duração a cada 30 segundos
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (turnoAtivo != null) atualizarDuracao();
     });
@@ -44,7 +41,8 @@ class _TurnoScreenState extends State<TurnoScreen> {
     _timer?.cancel();
     kmInicialCtrl.dispose();
     kmFinalCtrl.dispose();
-    ganhoBrutoCtrl.dispose();
+    for (final c in ganhoCtrl.values) c.dispose();
+    for (final c in corridasCtrl.values) c.dispose();
     super.dispose();
   }
 
@@ -64,6 +62,30 @@ class _TurnoScreenState extends State<TurnoScreen> {
     setState(() => duracao = formatarHoras(horas));
   }
 
+  void togglePlataforma(String p) {
+    setState(() {
+      if (plataformasSelecionadas.contains(p)) {
+        plataformasSelecionadas.remove(p);
+        ganhoCtrl[p]?.dispose();
+        ganhoCtrl.remove(p);
+        corridasCtrl[p]?.dispose();
+        corridasCtrl.remove(p);
+      } else {
+        plataformasSelecionadas.add(p);
+        ganhoCtrl[p] = TextEditingController();
+        corridasCtrl[p] = TextEditingController();
+      }
+    });
+  }
+
+  double get totalGanho {
+    double total = 0;
+    for (final p in plataformasSelecionadas) {
+      total += double.tryParse(ganhoCtrl[p]?.text.replaceAll(',', '.') ?? '') ?? 0;
+    }
+    return total;
+  }
+
   Future<void> handleIniciar() async {
     final km = kmInicialCtrl.text.isNotEmpty
         ? double.tryParse(kmInicialCtrl.text.replaceAll(',', '.'))
@@ -74,9 +96,9 @@ class _TurnoScreenState extends State<TurnoScreen> {
 
     if (!sucesso && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('GPS em segundo plano não autorizado. Verifique as permissões.'),
-          backgroundColor: _vermelho,
+        SnackBar(
+          content: const Text('GPS em segundo plano não autorizado.'),
+          backgroundColor: Cores.vermelho(context),
         ),
       );
     }
@@ -87,9 +109,22 @@ class _TurnoScreenState extends State<TurnoScreen> {
   Future<void> handleFinalizar() async {
     if (turnoAtivo == null) return;
 
-    if (ganhoBrutoCtrl.text.isEmpty) {
+    if (plataformasSelecionadas.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Informe o ganho do turno'), backgroundColor: _vermelho),
+        SnackBar(
+          content: const Text('Selecione ao menos uma plataforma'),
+          backgroundColor: Cores.vermelho(context),
+        ),
+      );
+      return;
+    }
+
+    if (totalGanho <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Informe o ganho de ao menos uma plataforma'),
+          backgroundColor: Cores.vermelho(context),
+        ),
       );
       return;
     }
@@ -97,14 +132,17 @@ class _TurnoScreenState extends State<TurnoScreen> {
     final confirma = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: _card,
-        title: const Text('Finalizar turno?', style: TextStyle(color: _branco)),
-        content: const Text('Confirma o encerramento?', style: TextStyle(color: _cinza)),
+        backgroundColor: Cores.card(context),
+        title: Text('Finalizar turno?', style: TextStyle(color: Cores.texto(context))),
+        content: Text(
+          'Ganho total: ${formatarReais(totalGanho)}',
+          style: TextStyle(color: Cores.cinza(context)),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Finalizar', style: TextStyle(color: _vermelho)),
+            child: Text('Finalizar', style: TextStyle(color: Cores.vermelho(context))),
           ),
         ],
       ),
@@ -115,28 +153,40 @@ class _TurnoScreenState extends State<TurnoScreen> {
     final km = kmFinalCtrl.text.isNotEmpty
         ? double.tryParse(kmFinalCtrl.text.replaceAll(',', '.'))
         : null;
-    final ganho = double.tryParse(ganhoBrutoCtrl.text.replaceAll(',', '.')) ?? 0;
 
-    await finalizarTurno(turnoAtivo!['id'], kmFinal: km, ganhoBruto: ganho);
-    await pararRastreamento();
-
-    setState(() {
-      turnoAtivo = null;
-      rastreando = false;
-      duracao = '';
+    final totalCorridas = plataformasSelecionadas.fold<int>(0, (soma, p) {
+      return soma + (int.tryParse(corridasCtrl[p]?.text ?? '') ?? 0);
     });
 
-    kmInicialCtrl.clear();
-    kmFinalCtrl.clear();
-    ganhoBrutoCtrl.clear();
+    await finalizarTurno(
+      turnoAtivo!['id'],
+      kmFinal: km,
+      ganhoBruto: totalGanho,
+      totalCorridas: totalCorridas,
+    );
+
+    // salva ganho por plataforma
+    for (final p in plataformasSelecionadas) {
+      final ganho = double.tryParse(ganhoCtrl[p]?.text.replaceAll(',', '.') ?? '') ?? 0;
+      final corridas = int.tryParse(corridasCtrl[p]?.text ?? '') ?? 0;
+      if (ganho > 0) {
+        await salvarGanhoPorPlataforma(turnoAtivo!['id'], p, corridas, ganho);
+      }
+    }
+
+    await pararRastreamento();
 
     if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
+    final bg = Cores.bg(context);
+    final cinza = Cores.cinza(context);
+    final texto = Cores.texto(context);
+
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: bg,
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
@@ -145,14 +195,14 @@ class _TurnoScreenState extends State<TurnoScreen> {
             const SizedBox(height: 56),
             GestureDetector(
               onTap: () => Navigator.pop(context),
-              child: const Text('← voltar', style: TextStyle(fontSize: 14, color: _cinza)),
+              child: Text('← voltar', style: TextStyle(fontSize: 14, color: cinza)),
             ),
             const SizedBox(height: 12),
-            const Text('TURNO', style: TextStyle(
-              fontSize: 24, fontWeight: FontWeight.w900, color: _branco, letterSpacing: 4,
+            Text('TURNO', style: TextStyle(
+              fontSize: 24, fontWeight: FontWeight.w900, color: texto, letterSpacing: 4,
             )),
             const SizedBox(height: 24),
-            turnoAtivo == null ? _buildIniciar() : _buildFinalizar(),
+            turnoAtivo == null ? _buildIniciar(context) : _buildFinalizar(context),
             const SizedBox(height: 40),
           ],
         ),
@@ -160,45 +210,53 @@ class _TurnoScreenState extends State<TurnoScreen> {
     );
   }
 
-  Widget _buildIniciar() {
+  Widget _buildIniciar(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('NOVO TURNO', style: TextStyle(fontSize: 10, color: _cinza, letterSpacing: 2)),
+        Text('NOVO TURNO', style: TextStyle(fontSize: 10, color: Cores.cinza(context), letterSpacing: 2)),
         const SizedBox(height: 12),
-        _buildCard(children: [
-          _buildLabel('Hodômetro atual (opcional)'),
-          _buildInput(kmInicialCtrl, 'km atual do carro', TextInputType.number),
+        _buildCard(context, children: [
+          _buildLabel(context, 'Hodômetro atual (opcional)'),
+          _buildInput(context, kmInicialCtrl, 'km atual do carro', TextInputType.number),
         ]),
         const SizedBox(height: 16),
-        _buildBotao('INICIAR TURNO', _amarelo, const Color(0xFF0D0D0D), handleIniciar),
+        _buildBotao(context, 'INICIAR TURNO', Cores.amarelo(context), const Color(0xFF0D0D0D), handleIniciar),
       ],
     );
   }
 
-  Widget _buildFinalizar() {
+  Widget _buildFinalizar(BuildContext context) {
+    final verde = Cores.verde(context);
+    final cinza = Cores.cinza(context);
+    final texto = Cores.texto(context);
+    final amarelo = Cores.amarelo(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // card turno ativo
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: const Color(0xFF0F1A0A),
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF0F1A0A)
+                : const Color(0xFFEEFFEE),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _verde),
+            border: Border.all(color: verde),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('TURNO EM ANDAMENTO', style: TextStyle(fontSize: 10, color: _verde, letterSpacing: 2)),
+              Text('TURNO EM ANDAMENTO', style: TextStyle(fontSize: 10, color: verde, letterSpacing: 2)),
               const SizedBox(height: 4),
               Text(
                 'iniciado às ${TimeOfDay.fromDateTime(DateTime.parse(turnoAtivo!['inicio_em'])).format(context)}',
-                style: const TextStyle(fontSize: 14, color: _cinza),
+                style: TextStyle(fontSize: 14, color: cinza),
               ),
               const SizedBox(height: 8),
-              Text(duracao.isEmpty ? '—' : duracao, style: const TextStyle(
-                fontSize: 36, fontWeight: FontWeight.w900, color: _branco,
+              Text(duracao.isEmpty ? '—' : duracao, style: TextStyle(
+                fontSize: 36, fontWeight: FontWeight.w900, color: texto,
               )),
               const SizedBox(height: 16),
               Row(
@@ -206,81 +264,156 @@ class _TurnoScreenState extends State<TurnoScreen> {
                   Container(
                     width: 8, height: 8,
                     decoration: BoxDecoration(
-                      color: rastreando ? _verde : _cinza,
+                      color: rastreando ? verde : cinza,
                       shape: BoxShape.circle,
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     rastreando ? 'GPS registrando rota' : 'GPS inativo',
-                    style: TextStyle(fontSize: 13, color: rastreando ? _verde : _cinza),
+                    style: TextStyle(fontSize: 13, color: rastreando ? verde : cinza),
                   ),
                 ],
               ),
             ],
           ),
         ),
+
         const SizedBox(height: 24),
-        const Text('FINALIZAR TURNO', style: TextStyle(fontSize: 10, color: _cinza, letterSpacing: 2)),
+        Text('FINALIZAR TURNO', style: TextStyle(fontSize: 10, color: cinza, letterSpacing: 2)),
         const SizedBox(height: 12),
-        _buildCard(children: [
-          _buildLabel('Ganho bruto do turno (R\$) *'),
-          _buildInput(ganhoBrutoCtrl, 'quanto você recebeu', TextInputType.number),
-          const SizedBox(height: 16),
-          _buildLabel('Hodômetro final (opcional)'),
-          _buildInput(kmFinalCtrl, 'km do carro agora', TextInputType.number),
+
+        // seleção de plataformas
+        _buildCard(context, children: [
+          _buildLabel(context, 'Quais apps você usou?'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _plataformas.map((p) {
+              final selecionado = plataformasSelecionadas.contains(p);
+              return GestureDetector(
+                onTap: () => togglePlataforma(p),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: selecionado
+                        ? (Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFF1A1A00)
+                            : const Color(0xFFFFFDE0))
+                        : Cores.inputFundo(context),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: selecionado ? amarelo : Cores.borda(context)),
+                  ),
+                  child: Text(p, style: TextStyle(
+                    color: selecionado ? amarelo : cinza, fontSize: 13,
+                  )),
+                ),
+              );
+            }).toList(),
+          ),
         ]),
+
+        // inputs por plataforma
+        if (plataformasSelecionadas.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          ...plataformasSelecionadas.map((p) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _buildCard(context, children: [
+              Text(p, style: TextStyle(
+                fontSize: 14, fontWeight: FontWeight.w700, color: amarelo,
+              )),
+              const SizedBox(height: 12),
+              _buildLabel(context, 'Ganho (R\$) *'),
+              _buildInput(context, ganhoCtrl[p]!, 'ex: 45.00', TextInputType.number,
+                onChanged: (_) => setState(() {})),
+              const SizedBox(height: 12),
+              _buildLabel(context, 'Corridas'),
+              _buildInput(context, corridasCtrl[p]!, 'quantidade de corridas', TextInputType.number),
+            ]),
+          )),
+
+          // total calculado
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF0F0F00)
+                  : const Color(0xFFFFFDE0),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: amarelo),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('TOTAL DO TURNO', style: TextStyle(fontSize: 12, color: cinza, letterSpacing: 1)),
+                Text(formatarReais(totalGanho), style: TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.w900, color: amarelo,
+                )),
+              ],
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 12),
+        _buildCard(context, children: [
+          _buildLabel(context, 'Hodômetro final (opcional)'),
+          _buildInput(context, kmFinalCtrl, 'km do carro agora', TextInputType.number),
+        ]),
+
         const SizedBox(height: 16),
-        _buildBotao('FINALIZAR TURNO', _vermelho, _branco, handleFinalizar),
+        _buildBotao(context, 'FINALIZAR TURNO', Cores.vermelho(context), Colors.white, handleFinalizar),
       ],
     );
   }
 
-  Widget _buildCard({required List<Widget> children}) {
+  Widget _buildCard(BuildContext context, {required List<Widget> children}) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _card, borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _borda),
+        color: Cores.card(context),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Cores.borda(context)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
     );
   }
 
-  Widget _buildLabel(String text) {
+  Widget _buildLabel(BuildContext context, String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(text, style: const TextStyle(fontSize: 12, color: _cinza, letterSpacing: 1)),
+      child: Text(text, style: TextStyle(fontSize: 12, color: Cores.cinza(context), letterSpacing: 1)),
     );
   }
 
-  Widget _buildInput(TextEditingController ctrl, String hint, TextInputType tipo) {
+  Widget _buildInput(BuildContext context, TextEditingController ctrl, String hint, TextInputType tipo, {Function(String)? onChanged}) {
     return TextField(
       controller: ctrl,
       keyboardType: tipo,
-      style: const TextStyle(color: _branco, fontSize: 16),
+      onChanged: onChanged,
+      style: TextStyle(color: Cores.inputTexto(context), fontSize: 16),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: _cinza),
+        hintStyle: TextStyle(color: Cores.cinza(context)),
         filled: true,
-        fillColor: const Color(0xFF1A1A1A),
+        fillColor: Cores.inputFundo(context),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _borda),
+          borderSide: BorderSide(color: Cores.borda(context)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _borda),
+          borderSide: BorderSide(color: Cores.borda(context)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _amarelo),
+          borderSide: BorderSide(color: Cores.amarelo(context)),
         ),
       ),
     );
   }
 
-  Widget _buildBotao(String label, Color cor, Color corTexto, VoidCallback onTap) {
+  Widget _buildBotao(BuildContext context, String label, Color cor, Color corTexto, VoidCallback onTap) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
