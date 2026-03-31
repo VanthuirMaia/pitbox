@@ -22,7 +22,6 @@ class _TurnoScreenState extends State<TurnoScreen> {
   final kmFinalCtrl = TextEditingController();
   String duracao = '';
 
-  // ganho por plataforma
   final Map<String, TextEditingController> ganhoCtrl = {};
   final Map<String, TextEditingController> corridasCtrl = {};
   final List<String> plataformasSelecionadas = [];
@@ -165,7 +164,6 @@ class _TurnoScreenState extends State<TurnoScreen> {
       totalCorridas: totalCorridas,
     );
 
-    // salva ganho por plataforma
     for (final p in plataformasSelecionadas) {
       final ganho = double.tryParse(ganhoCtrl[p]?.text.replaceAll(',', '.') ?? '') ?? 0;
       final corridas = int.tryParse(corridasCtrl[p]?.text ?? '') ?? 0;
@@ -175,18 +173,53 @@ class _TurnoScreenState extends State<TurnoScreen> {
     }
 
     await pararRastreamento();
+    if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> handleCancelar() async {
+    if (turnoAtivo == null) return;
+
+    final confirma = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: Cores.card(context),
+        title: Text('Cancelar turno?', style: TextStyle(color: Cores.texto(context))),
+        content: Text(
+          'O turno será descartado e os dados não serão salvos.',
+          style: TextStyle(color: Cores.cinza(context)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Voltar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Cancelar turno', style: TextStyle(color: Cores.vermelho(context))),
+          ),
+        ],
+      ),
+    );
+
+    if (confirma != true) return;
+
+    await cancelarTurno(turnoAtivo!['id']);
+    await pararRastreamento();
+
+    setState(() {
+      turnoAtivo = null;
+      rastreando = false;
+      duracao = '';
+      plataformasSelecionadas.clear();
+    });
 
     if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    final bg = Cores.bg(context);
-    final cinza = Cores.cinza(context);
-    final texto = Cores.texto(context);
-
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: Cores.bg(context),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
@@ -195,11 +228,12 @@ class _TurnoScreenState extends State<TurnoScreen> {
             const SizedBox(height: 56),
             GestureDetector(
               onTap: () => Navigator.pop(context),
-              child: Text('← voltar', style: TextStyle(fontSize: 14, color: cinza)),
+              child: Text('← voltar', style: TextStyle(fontSize: 14, color: Cores.cinza(context))),
             ),
             const SizedBox(height: 12),
             Text('TURNO', style: TextStyle(
-              fontSize: 24, fontWeight: FontWeight.w900, color: texto, letterSpacing: 4,
+              fontSize: 24, fontWeight: FontWeight.w900,
+              color: Cores.texto(context), letterSpacing: 4,
             )),
             const SizedBox(height: 24),
             turnoAtivo == null ? _buildIniciar(context) : _buildFinalizar(context),
@@ -283,7 +317,6 @@ class _TurnoScreenState extends State<TurnoScreen> {
         Text('FINALIZAR TURNO', style: TextStyle(fontSize: 10, color: cinza, letterSpacing: 2)),
         const SizedBox(height: 12),
 
-        // seleção de plataformas
         _buildCard(context, children: [
           _buildLabel(context, 'Quais apps você usou?'),
           const SizedBox(height: 8),
@@ -314,15 +347,12 @@ class _TurnoScreenState extends State<TurnoScreen> {
           ),
         ]),
 
-        // inputs por plataforma
         if (plataformasSelecionadas.isNotEmpty) ...[
           const SizedBox(height: 12),
           ...plataformasSelecionadas.map((p) => Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: _buildCard(context, children: [
-              Text(p, style: TextStyle(
-                fontSize: 14, fontWeight: FontWeight.w700, color: amarelo,
-              )),
+              Text(p, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: amarelo)),
               const SizedBox(height: 12),
               _buildLabel(context, 'Ganho (R\$) *'),
               _buildInput(context, ganhoCtrl[p]!, 'ex: 45.00', TextInputType.number,
@@ -332,8 +362,6 @@ class _TurnoScreenState extends State<TurnoScreen> {
               _buildInput(context, corridasCtrl[p]!, 'quantidade de corridas', TextInputType.number),
             ]),
           )),
-
-          // total calculado
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -363,6 +391,8 @@ class _TurnoScreenState extends State<TurnoScreen> {
 
         const SizedBox(height: 16),
         _buildBotao(context, 'FINALIZAR TURNO', Cores.vermelho(context), Colors.white, handleFinalizar),
+        const SizedBox(height: 8),
+        _buildBotaoOutline(context, 'CANCELAR TURNO', Cores.vermelho(context), handleCancelar),
       ],
     );
   }
@@ -426,6 +456,24 @@ class _TurnoScreenState extends State<TurnoScreen> {
         child: Text(label, style: TextStyle(
           fontSize: 16, fontWeight: FontWeight.w900,
           color: corTexto, letterSpacing: 2,
+        )),
+      ),
+    );
+  }
+
+  Widget _buildBotaoOutline(BuildContext context, String label, Color cor, VoidCallback onTap) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: cor),
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        child: Text(label, style: TextStyle(
+          fontSize: 16, fontWeight: FontWeight.w900,
+          color: cor, letterSpacing: 2,
         )),
       ),
     );

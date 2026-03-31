@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
 import '../database/queries.dart';
 import '../services/calculos.dart';
-
-const _bg = Color(0xFF0D0D0D);
-const _card = Color(0xFF161616);
-const _borda = Color(0xFF222222);
-const _amarelo = Color(0xFFE8FF00);
-const _branco = Color(0xFFF5F5F5);
-const _cinza = Color(0xFF666666);
+import '../services/tema.dart';
 
 class RelatorioScreen extends StatefulWidget {
   const RelatorioScreen({super.key});
@@ -41,18 +35,17 @@ class _RelatorioScreenState extends State<RelatorioScreen> {
 
   Future<void> carregarDados() async {
     final r = await resumoPeriodo(datas['inicio']!, datas['fim']!);
-    final t = await listarTurnos(limite: 10);
+    final t = await listarTurnos(limite: 30);
     setState(() {
       resumo = r;
       turnos = t;
     });
   }
 
-  // ganho real por hora, só calcula se turno teve mais de 15 minutos
   String get ganhoRealPorHora {
     final horas = (resumo?['horas_total'] as num?)?.toDouble() ?? 0;
     final ganho = (resumo?['ganho_total'] as num?)?.toDouble() ?? 0;
-    if (horas < 0.25) return '—'; // menos de 15 minutos, não calcula
+    if (horas < 0.25) return '—';
     final custoEstimado = ganho * 0.30;
     final porHora = calcularGanhoRealPorHora(
       ganhoBruto: ganho,
@@ -63,12 +56,42 @@ class _RelatorioScreenState extends State<RelatorioScreen> {
     return '${formatarReais(porHora)}/h';
   }
 
-  // ganho por km
   String get ganhoPorKm {
     final km = (resumo?['km_total'] as num?)?.toDouble() ?? 0;
     final ganho = (resumo?['ganho_total'] as num?)?.toDouble() ?? 0;
     if (km <= 0) return '—';
     return '${formatarReais(ganho / km)}/km';
+  }
+
+  Future<void> confirmarExclusao(Map<String, dynamic> turno) async {
+    final data = DateTime.parse(turno['inicio_em']);
+    final dataStr = '${_diaSemana(data.weekday)}, ${data.day.toString().padLeft(2, '0')}/${data.month.toString().padLeft(2, '0')}';
+
+    final confirma = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: Cores.card(context),
+        title: Text('Excluir turno?', style: TextStyle(color: Cores.texto(context))),
+        content: Text(
+          'Turno de $dataStr — ${formatarReais((turno['ganho_bruto'] as num?)?.toDouble() ?? 0)}\n\nEssa ação não pode ser desfeita.',
+          style: TextStyle(color: Cores.cinza(context)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Excluir', style: TextStyle(color: Cores.vermelho(context))),
+          ),
+        ],
+      ),
+    );
+
+    if (confirma != true) return;
+    await excluirTurno(turno['id']);
+    carregarDados();
   }
 
   @override
@@ -77,9 +100,12 @@ class _RelatorioScreenState extends State<RelatorioScreen> {
     final horas = (resumo?['horas_total'] as num?)?.toDouble() ?? 0;
     final km = (resumo?['km_total'] as num?)?.toDouble() ?? 0;
     final totalTurnos = resumo?['total_turnos'] ?? 0;
+    final amarelo = Cores.amarelo(context);
+    final cinza = Cores.cinza(context);
+    final texto = Cores.texto(context);
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: Cores.bg(context),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
@@ -88,11 +114,11 @@ class _RelatorioScreenState extends State<RelatorioScreen> {
             const SizedBox(height: 56),
             GestureDetector(
               onTap: () => Navigator.pop(context),
-              child: const Text('← voltar', style: TextStyle(fontSize: 14, color: _cinza)),
+              child: Text('← voltar', style: TextStyle(fontSize: 14, color: cinza)),
             ),
             const SizedBox(height: 12),
-            const Text('📊 RELATÓRIO', style: TextStyle(
-              fontSize: 24, fontWeight: FontWeight.w900, color: _branco, letterSpacing: 2,
+            Text('📊 RELATÓRIO', style: TextStyle(
+              fontSize: 24, fontWeight: FontWeight.w900, color: texto, letterSpacing: 2,
             )),
             const SizedBox(height: 24),
 
@@ -111,13 +137,17 @@ class _RelatorioScreenState extends State<RelatorioScreen> {
                       margin: const EdgeInsets.only(right: 8),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: ativo ? const Color(0xFF1A1A00) : _card,
+                        color: ativo
+                            ? (Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF1A1A00)
+                                : const Color(0xFFFFFDE0))
+                            : Cores.card(context),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: ativo ? _amarelo : _borda),
+                        border: Border.all(color: ativo ? amarelo : Cores.borda(context)),
                       ),
                       alignment: Alignment.center,
                       child: Text(label, style: TextStyle(
-                        color: ativo ? _amarelo : _cinza,
+                        color: ativo ? amarelo : cinza,
                         fontWeight: ativo ? FontWeight.w700 : FontWeight.normal,
                         fontSize: 13,
                       )),
@@ -128,7 +158,7 @@ class _RelatorioScreenState extends State<RelatorioScreen> {
             ),
             const SizedBox(height: 20),
 
-            // grid métricas principais
+            // grid métricas
             GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
@@ -137,68 +167,57 @@ class _RelatorioScreenState extends State<RelatorioScreen> {
               mainAxisSpacing: 8,
               childAspectRatio: 1.6,
               children: [
-                _CardMetrica(label: 'ganho bruto', valor: formatarReais(ganho), cor: _amarelo),
-                _CardMetrica(label: 'horas rodadas', valor: formatarHoras(horas)),
-                _CardMetrica(label: 'km rodados', valor: '${km.toStringAsFixed(0)} km'),
-                _CardMetrica(label: 'turnos', valor: '$totalTurnos'),
+                _CardMetrica(label: 'ganho bruto', valor: formatarReais(ganho), cor: amarelo),
+                _CardMetrica(label: 'horas rodadas', valor: formatarHoras(horas), cor: texto),
+                _CardMetrica(label: 'km rodados', valor: '${km.toStringAsFixed(0)} km', cor: texto),
+                _CardMetrica(label: 'turnos', valor: '$totalTurnos', cor: texto),
               ],
             ),
             const SizedBox(height: 8),
 
-            // métricas de rentabilidade
+            // rentabilidade
             const SizedBox(height: 16),
-            const Text('RENTABILIDADE', style: TextStyle(fontSize: 10, color: _cinza, letterSpacing: 2)),
+            Text('RENTABILIDADE', style: TextStyle(fontSize: 10, color: cinza, letterSpacing: 2)),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(
-                  child: _CardMetrica(
-                    label: 'ganho real/hora',
-                    valor: ganhoRealPorHora,
-                    cor: _amarelo,
-                    obs: '~30% custos',
-                  ),
-                ),
+                Expanded(child: _CardMetrica(label: 'ganho real/hora', valor: ganhoRealPorHora, cor: amarelo, obs: '~30% custos')),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: _CardMetrica(
-                    label: 'ganho por km',
-                    valor: ganhoPorKm,
-                    cor: _amarelo,
-                  ),
-                ),
+                Expanded(child: _CardMetrica(label: 'ganho por km', valor: ganhoPorKm, cor: amarelo)),
               ],
             ),
-            const SizedBox(height: 8),
 
-            // aviso se dados insuficientes
-            if (km <= 0 || horas < 0.25)
+            if (km <= 0 || horas < 0.25) ...[
+              const SizedBox(height: 8),
               Container(
-                margin: const EdgeInsets.only(top: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1A1500),
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF1A1500)
+                      : const Color(0xFFFFFAE0),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFF444400)),
+                  border: Border.all(color: const Color(0xFF888800)),
                 ),
                 child: const Text(
                   'Registre o hodômetro ao iniciar e finalizar turnos para cálculos mais precisos.',
-                  style: TextStyle(fontSize: 12, color: Color(0xFFAAAA00)),
+                  style: TextStyle(fontSize: 12, color: Color(0xFF888800)),
                 ),
               ),
+            ],
 
             const SizedBox(height: 24),
-
-            // histórico de turnos
-            const Text('ÚLTIMOS TURNOS',
-              style: TextStyle(fontSize: 10, color: _cinza, letterSpacing: 2)),
+            Text('ÚLTIMOS TURNOS', style: TextStyle(fontSize: 10, color: cinza, letterSpacing: 2)),
+            const SizedBox(height: 4),
+            Text('Toque longo para excluir', style: TextStyle(fontSize: 11, color: cinza)),
             const SizedBox(height: 12),
 
             if (turnos.isEmpty)
-              const Text('nenhum turno finalizado ainda',
-                style: TextStyle(fontSize: 14, color: _cinza))
+              Text('nenhum turno finalizado ainda', style: TextStyle(fontSize: 14, color: cinza))
             else
-              ...turnos.map((t) => _TurnoItem(turno: t)),
+              ...turnos.map((t) => _TurnoItem(
+                turno: t,
+                onLongPress: () => confirmarExclusao(t),
+              )),
 
             const SizedBox(height: 40),
           ],
@@ -214,27 +233,28 @@ class _CardMetrica extends StatelessWidget {
   final Color cor;
   final String? obs;
 
-  const _CardMetrica({required this.label, required this.valor, this.cor = _branco, this.obs});
+  const _CardMetrica({required this.label, required this.valor, required this.cor, this.obs});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _card, borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _borda),
+        color: Cores.card(context),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Cores.borda(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(label, style: const TextStyle(fontSize: 10, color: _cinza, letterSpacing: 1)),
+          Text(label, style: TextStyle(fontSize: 10, color: Cores.cinza(context), letterSpacing: 1)),
           const SizedBox(height: 6),
           Text(valor, style: TextStyle(fontSize: 20, color: cor, fontWeight: FontWeight.w800)),
           if (obs != null) ...[
             const SizedBox(height: 4),
-            Text(obs!, style: const TextStyle(fontSize: 10, color: _cinza)),
-          ]
+            Text(obs!, style: TextStyle(fontSize: 10, color: Cores.cinza(context))),
+          ],
         ],
       ),
     );
@@ -243,8 +263,9 @@ class _CardMetrica extends StatelessWidget {
 
 class _TurnoItem extends StatelessWidget {
   final Map<String, dynamic> turno;
+  final VoidCallback onLongPress;
 
-  const _TurnoItem({required this.turno});
+  const _TurnoItem({required this.turno, required this.onLongPress});
 
   @override
   Widget build(BuildContext context) {
@@ -260,46 +281,55 @@ class _TurnoItem extends StatelessWidget {
     final ganho = (turno['ganho_bruto'] as num?)?.toDouble() ?? 0;
     final data = '${_diaSemana(inicio.weekday)}, ${inicio.day.toString().padLeft(2, '0')}/${inicio.month.toString().padLeft(2, '0')}';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _card, borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _borda),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(data, style: const TextStyle(fontSize: 14, color: _branco)),
-              const SizedBox(height: 2),
-              Text(formatarHoras(horas), style: const TextStyle(fontSize: 12, color: _cinza)),
-              if (kmRodados != null && kmRodados > 0) ...[
+    return GestureDetector(
+      onLongPress: onLongPress,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Cores.card(context),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Cores.borda(context)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(data, style: TextStyle(fontSize: 14, color: Cores.texto(context))),
                 const SizedBox(height: 2),
-                Text('${kmRodados.toStringAsFixed(0)} km',
-                  style: const TextStyle(fontSize: 12, color: _cinza)),
+                Text(formatarHoras(horas), style: TextStyle(fontSize: 12, color: Cores.cinza(context))),
+                if (kmRodados != null && kmRodados > 0) ...[
+                  const SizedBox(height: 2),
+                  Text('${kmRodados.toStringAsFixed(0)} km',
+                    style: TextStyle(fontSize: 12, color: Cores.cinza(context))),
+                ],
+                if (turno['plataforma'] != null) ...[
+                  const SizedBox(height: 2),
+                  Text(turno['plataforma'],
+                    style: TextStyle(fontSize: 11, color: Cores.cinza(context))),
+                ],
               ],
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(formatarReais(ganho),
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _amarelo)),
-              if (kmRodados != null && kmRodados > 0)
-                Text(formatarReais(ganho / kmRodados) + '/km',
-                  style: const TextStyle(fontSize: 12, color: _cinza)),
-            ],
-          ),
-        ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(formatarReais(ganho), style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w800, color: Cores.amarelo(context))),
+                if (kmRodados != null && kmRodados > 0)
+                  Text('${formatarReais(ganho / kmRodados)}/km',
+                    style: TextStyle(fontSize: 12, color: Cores.cinza(context))),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
+}
 
-  String _diaSemana(int dia) {
-    const dias = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
-    return dias[dia - 1];
-  }
+String _diaSemana(int dia) {
+  const dias = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
+  return dias[dia - 1];
 }

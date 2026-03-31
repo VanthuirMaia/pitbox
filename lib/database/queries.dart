@@ -237,3 +237,18 @@ Future<List<Map<String, dynamic>>> buscarGanhosPorPlataforma(int turnoId) async 
     whereArgs: [turnoId],
   );
 }
+
+// cancela o turno ativo sem salvar
+Future<void> cancelarTurno(int turnoId) async {
+  final db = await getDb();
+  await db.delete('turno', where: 'id = ?', whereArgs: [turnoId]);
+  await db.delete('rota', where: 'turno_id = ?', whereArgs: [turnoId]);
+}
+
+// exclui turno finalizado e todos os dados relacionados
+Future<void> excluirTurno(int turnoId) async {
+  final db = await getDb();
+  await db.delete('turno_plataforma', where: 'turno_id = ?', whereArgs: [turnoId]);
+  await db.delete('rota', where: 'turno_id = ?', whereArgs: [turnoId]);
+  await db.delete('turno', where: 'id = ?', whereArgs: [turnoId]);
+}

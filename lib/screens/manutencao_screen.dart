@@ -1,13 +1,6 @@
 import 'package:flutter/material.dart';
 import '../database/queries.dart';
-
-const _bg = Color(0xFF0D0D0D);
-const _card = Color(0xFF161616);
-const _borda = Color(0xFF222222);
-const _amarelo = Color(0xFFE8FF00);
-const _branco = Color(0xFFF5F5F5);
-const _cinza = Color(0xFF666666);
-const _vermelho = Color(0xFFFF4444);
+import '../services/tema.dart';
 
 class ManutencaoScreen extends StatefulWidget {
   const ManutencaoScreen({super.key});
@@ -36,7 +29,8 @@ class _ManutencaoScreenState extends State<ManutencaoScreen> {
 
     if (descricaoCtrl.text.isEmpty || v == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Descrição e valor são obrigatórios'), backgroundColor: _vermelho),
+        SnackBar(content: const Text('Descrição e valor são obrigatórios'),
+          backgroundColor: Cores.vermelho(context)),
       );
       return;
     }
@@ -53,8 +47,12 @@ class _ManutencaoScreenState extends State<ManutencaoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final amarelo = Cores.amarelo(context);
+    final cinza = Cores.cinza(context);
+    final texto = Cores.texto(context);
+
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: Cores.bg(context),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
@@ -63,33 +61,34 @@ class _ManutencaoScreenState extends State<ManutencaoScreen> {
             const SizedBox(height: 56),
             GestureDetector(
               onTap: () => Navigator.pop(context),
-              child: const Text('← voltar', style: TextStyle(fontSize: 14, color: _cinza)),
+              child: Text('← voltar', style: TextStyle(fontSize: 14, color: cinza)),
             ),
             const SizedBox(height: 12),
-            const Text('🔧 MANUTENÇÃO', style: TextStyle(
-              fontSize: 24, fontWeight: FontWeight.w900, color: _branco, letterSpacing: 2,
+            Text('🔧 MANUTENÇÃO', style: TextStyle(
+              fontSize: 24, fontWeight: FontWeight.w900, color: texto, letterSpacing: 2,
             )),
             const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: _card, borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _borda),
+                color: Cores.card(context),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Cores.borda(context)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _label('Descrição *'),
-                  _input(descricaoCtrl, 'ex: troca de óleo, pneu, freio...', TextInputType.text),
+                  _label(context, 'Descrição *'),
+                  _input(context, descricaoCtrl, 'ex: troca de óleo, pneu, freio...', TextInputType.text),
                   const SizedBox(height: 16),
-                  _label('Valor (R\$) *'),
-                  _input(valorCtrl, 'ex: 250.00', TextInputType.number),
+                  _label(context, 'Valor (R\$) *'),
+                  _input(context, valorCtrl, 'ex: 250.00', TextInputType.number),
                   const SizedBox(height: 16),
-                  _label('Hodômetro atual (opcional)'),
-                  _input(kmCtrl, 'km do carro', TextInputType.number),
+                  _label(context, 'Hodômetro atual (opcional)'),
+                  _input(context, kmCtrl, 'km do carro', TextInputType.number),
                   const SizedBox(height: 16),
-                  _label('Oficina (opcional)'),
-                  _input(oficinaCtrl, 'nome da oficina', TextInputType.text),
+                  _label(context, 'Oficina (opcional)'),
+                  _input(context, oficinaCtrl, 'nome da oficina', TextInputType.text),
                 ],
               ),
             ),
@@ -99,12 +98,13 @@ class _ManutencaoScreenState extends State<ManutencaoScreen> {
               child: ElevatedButton(
                 onPressed: handleSalvar,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _amarelo,
+                  backgroundColor: amarelo,
                   padding: const EdgeInsets.symmetric(vertical: 18),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: const Text('SALVAR', style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF0D0D0D), letterSpacing: 2,
+                  fontSize: 16, fontWeight: FontWeight.w900,
+                  color: Color(0xFF0D0D0D), letterSpacing: 2,
                 )),
               ),
             ),
@@ -115,22 +115,24 @@ class _ManutencaoScreenState extends State<ManutencaoScreen> {
     );
   }
 
-  Widget _label(String text) => Padding(
+  Widget _label(BuildContext context, String text) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
-    child: Text(text, style: const TextStyle(fontSize: 12, color: _cinza, letterSpacing: 1)),
+    child: Text(text, style: TextStyle(fontSize: 12, color: Cores.cinza(context), letterSpacing: 1)),
   );
 
-  Widget _input(TextEditingController ctrl, String hint, TextInputType tipo) {
+  Widget _input(BuildContext context, TextEditingController ctrl, String hint, TextInputType tipo) {
     return TextField(
       controller: ctrl,
       keyboardType: tipo,
-      style: const TextStyle(color: _branco, fontSize: 16),
+      style: TextStyle(color: Cores.inputTexto(context), fontSize: 16),
       decoration: InputDecoration(
-        hintText: hint, hintStyle: const TextStyle(color: _cinza),
-        filled: true, fillColor: const Color(0xFF1A1A1A),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _borda)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _borda)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _amarelo)),
+        hintText: hint,
+        hintStyle: TextStyle(color: Cores.cinza(context)),
+        filled: true,
+        fillColor: Cores.inputFundo(context),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Cores.borda(context))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Cores.borda(context))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Cores.amarelo(context))),
       ),
     );
   }

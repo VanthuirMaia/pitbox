@@ -1,13 +1,6 @@
 import 'package:flutter/material.dart';
 import '../database/queries.dart';
-
-const _bg = Color(0xFF0D0D0D);
-const _card = Color(0xFF161616);
-const _borda = Color(0xFF222222);
-const _amarelo = Color(0xFFE8FF00);
-const _branco = Color(0xFFF5F5F5);
-const _cinza = Color(0xFF666666);
-const _vermelho = Color(0xFFFF4444);
+import '../services/tema.dart';
 
 class AbastecimentoScreen extends StatefulWidget {
   const AbastecimentoScreen({super.key});
@@ -45,13 +38,13 @@ class _AbastecimentoScreenState extends State<AbastecimentoScreen> {
 
     if (l == null || v == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Litros e valor são obrigatórios'), backgroundColor: _vermelho),
+        SnackBar(content: const Text('Litros e valor são obrigatórios'),
+          backgroundColor: Cores.vermelho(context)),
       );
       return;
     }
 
     final turno = await buscarTurnoAtivo();
-
     await registrarAbastecimento(
       turnoId: turno?['id'],
       litros: l,
@@ -65,8 +58,12 @@ class _AbastecimentoScreenState extends State<AbastecimentoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final amarelo = Cores.amarelo(context);
+    final cinza = Cores.cinza(context);
+    final texto = Cores.texto(context);
+
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: Cores.bg(context),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
@@ -75,35 +72,36 @@ class _AbastecimentoScreenState extends State<AbastecimentoScreen> {
             const SizedBox(height: 56),
             GestureDetector(
               onTap: () => Navigator.pop(context),
-              child: const Text('← voltar', style: TextStyle(fontSize: 14, color: _cinza)),
+              child: Text('← voltar', style: TextStyle(fontSize: 14, color: cinza)),
             ),
             const SizedBox(height: 12),
-            const Text('⛽ ABASTECIMENTO', style: TextStyle(
-              fontSize: 24, fontWeight: FontWeight.w900, color: _branco, letterSpacing: 2,
+            Text('⛽ ABASTECIMENTO', style: TextStyle(
+              fontSize: 24, fontWeight: FontWeight.w900, color: texto, letterSpacing: 2,
             )),
             const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: _card, borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _borda),
+                color: Cores.card(context),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Cores.borda(context)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _label('Litros abastecidos *'),
-                  _input(litrosCtrl, 'ex: 30.5', TextInputType.number,
+                  _label(context, 'Litros abastecidos *'),
+                  _input(context, litrosCtrl, 'ex: 30.5', TextInputType.number,
                     onChanged: (_) => setState(() {})),
                   const SizedBox(height: 16),
-                  _label('Valor total pago (R\$) *'),
-                  _input(valorCtrl, 'ex: 180.00', TextInputType.number,
+                  _label(context, 'Valor total pago (R\$) *'),
+                  _input(context, valorCtrl, 'ex: 180.00', TextInputType.number,
                     onChanged: (_) => setState(() {})),
                   if (precoPorLitro.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    Text(precoPorLitro, style: const TextStyle(fontSize: 13, color: _amarelo)),
+                    Text(precoPorLitro, style: TextStyle(fontSize: 13, color: amarelo)),
                   ],
                   const SizedBox(height: 16),
-                  _label('Tipo de combustível'),
+                  _label(context, 'Tipo de combustível'),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -112,19 +110,23 @@ class _AbastecimentoScreenState extends State<AbastecimentoScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
-                          color: combustivel == c ? const Color(0xFF1A1A00) : const Color(0xFF1A1A1A),
+                          color: combustivel == c
+                              ? (Theme.of(context).brightness == Brightness.dark
+                                  ? const Color(0xFF1A1A00)
+                                  : const Color(0xFFFFFDE0))
+                              : Cores.inputFundo(context),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: combustivel == c ? _amarelo : _borda),
+                          border: Border.all(color: combustivel == c ? amarelo : Cores.borda(context)),
                         ),
                         child: Text(c, style: TextStyle(
-                          color: combustivel == c ? _amarelo : _cinza, fontSize: 13,
+                          color: combustivel == c ? amarelo : cinza, fontSize: 13,
                         )),
                       ),
                     )).toList(),
                   ),
                   const SizedBox(height: 16),
-                  _label('Posto (opcional)'),
-                  _input(postoCtrl, 'nome do posto', TextInputType.text),
+                  _label(context, 'Posto (opcional)'),
+                  _input(context, postoCtrl, 'nome do posto', TextInputType.text),
                 ],
               ),
             ),
@@ -134,12 +136,16 @@ class _AbastecimentoScreenState extends State<AbastecimentoScreen> {
               child: ElevatedButton(
                 onPressed: handleSalvar,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _amarelo,
+                  backgroundColor: amarelo,
                   padding: const EdgeInsets.symmetric(vertical: 18),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text('SALVAR', style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF0D0D0D), letterSpacing: 2,
+                child: Text('SALVAR', style: TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w900,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF0D0D0D)
+                      : const Color(0xFF0D0D0D),
+                  letterSpacing: 2,
                 )),
               ),
             ),
@@ -150,23 +156,25 @@ class _AbastecimentoScreenState extends State<AbastecimentoScreen> {
     );
   }
 
-  Widget _label(String text) => Padding(
+  Widget _label(BuildContext context, String text) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
-    child: Text(text, style: const TextStyle(fontSize: 12, color: _cinza, letterSpacing: 1)),
+    child: Text(text, style: TextStyle(fontSize: 12, color: Cores.cinza(context), letterSpacing: 1)),
   );
 
-  Widget _input(TextEditingController ctrl, String hint, TextInputType tipo, {Function(String)? onChanged}) {
+  Widget _input(BuildContext context, TextEditingController ctrl, String hint, TextInputType tipo, {Function(String)? onChanged}) {
     return TextField(
       controller: ctrl,
       keyboardType: tipo,
       onChanged: onChanged,
-      style: const TextStyle(color: _branco, fontSize: 16),
+      style: TextStyle(color: Cores.inputTexto(context), fontSize: 16),
       decoration: InputDecoration(
-        hintText: hint, hintStyle: const TextStyle(color: _cinza),
-        filled: true, fillColor: const Color(0xFF1A1A1A),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _borda)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _borda)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _amarelo)),
+        hintText: hint,
+        hintStyle: TextStyle(color: Cores.cinza(context)),
+        filled: true,
+        fillColor: Cores.inputFundo(context),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Cores.borda(context))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Cores.borda(context))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Cores.amarelo(context))),
       ),
     );
   }
