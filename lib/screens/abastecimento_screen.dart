@@ -10,8 +10,8 @@ class AbastecimentoScreen extends StatefulWidget {
 }
 
 class _AbastecimentoScreenState extends State<AbastecimentoScreen> {
-  final litrosCtrl = TextEditingController();
   final valorCtrl = TextEditingController();
+  final precoPorLitroCtrl = TextEditingController();
   final postoCtrl = TextEditingController();
   String combustivel = 'gasolina';
 
@@ -19,35 +19,37 @@ class _AbastecimentoScreenState extends State<AbastecimentoScreen> {
 
   @override
   void dispose() {
-    litrosCtrl.dispose();
     valorCtrl.dispose();
+    precoPorLitroCtrl.dispose();
     postoCtrl.dispose();
     super.dispose();
   }
 
-  String get precoPorLitro {
-    final l = double.tryParse(litrosCtrl.text.replaceAll(',', '.')) ?? 0;
+  double get litrosCalculados {
     final v = double.tryParse(valorCtrl.text.replaceAll(',', '.')) ?? 0;
-    if (l > 0 && v > 0) return 'R\$ ${(v / l).toStringAsFixed(3)}/litro';
-    return '';
+    final p = double.tryParse(precoPorLitroCtrl.text.replaceAll(',', '.')) ?? 0;
+    if (v > 0 && p > 0) return v / p;
+    return 0;
   }
 
   Future<void> handleSalvar() async {
-    final l = double.tryParse(litrosCtrl.text.replaceAll(',', '.'));
     final v = double.tryParse(valorCtrl.text.replaceAll(',', '.'));
+    final p = double.tryParse(precoPorLitroCtrl.text.replaceAll(',', '.'));
 
-    if (l == null || v == null) {
+    if (v == null || p == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('Litros e valor são obrigatórios'),
+        SnackBar(content: const Text('Valor total e preço por litro são obrigatórios'),
           backgroundColor: Cores.vermelho(context)),
       );
       return;
     }
 
+    final litros = v / p;
     final turno = await buscarTurnoAtivo();
+
     await registrarAbastecimento(
       turnoId: turno?['id'],
-      litros: l,
+      litros: litros,
       valorTotal: v,
       posto: postoCtrl.text.isNotEmpty ? postoCtrl.text : null,
       tipoCombustivel: combustivel,
@@ -61,6 +63,7 @@ class _AbastecimentoScreenState extends State<AbastecimentoScreen> {
     final amarelo = Cores.amarelo(context);
     final cinza = Cores.cinza(context);
     final texto = Cores.texto(context);
+    final litros = litrosCalculados;
 
     return Scaffold(
       backgroundColor: Cores.bg(context),
@@ -89,16 +92,33 @@ class _AbastecimentoScreenState extends State<AbastecimentoScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _label(context, 'Litros abastecidos *'),
-                  _input(context, litrosCtrl, 'ex: 30.5', TextInputType.number,
-                    onChanged: (_) => setState(() {})),
-                  const SizedBox(height: 16),
                   _label(context, 'Valor total pago (R\$) *'),
                   _input(context, valorCtrl, 'ex: 180.00', TextInputType.number,
                     onChanged: (_) => setState(() {})),
-                  if (precoPorLitro.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _label(context, 'Preço por litro (R\$) *'),
+                  _input(context, precoPorLitroCtrl, 'ex: 6.29', TextInputType.number,
+                    onChanged: (_) => setState(() {})),
+                  if (litros > 0) ...[
                     const SizedBox(height: 8),
-                    Text(precoPorLitro, style: TextStyle(fontSize: 13, color: amarelo)),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFF0F0F00)
+                            : const Color(0xFFFFFDE0),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: amarelo),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Litros abastecidos', style: TextStyle(fontSize: 13, color: cinza)),
+                          Text('${litros.toStringAsFixed(2)}L',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: amarelo)),
+                        ],
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 16),
                   _label(context, 'Tipo de combustível'),
@@ -140,12 +160,9 @@ class _AbastecimentoScreenState extends State<AbastecimentoScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 18),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: Text('SALVAR', style: TextStyle(
+                child: const Text('SALVAR', style: TextStyle(
                   fontSize: 16, fontWeight: FontWeight.w900,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? const Color(0xFF0D0D0D)
-                      : const Color(0xFF0D0D0D),
-                  letterSpacing: 2,
+                  color: Color(0xFF0D0D0D), letterSpacing: 2,
                 )),
               ),
             ),

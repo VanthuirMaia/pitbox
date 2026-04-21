@@ -252,3 +252,37 @@ Future<void> excluirTurno(int turnoId) async {
   await db.delete('rota', where: 'turno_id = ?', whereArgs: [turnoId]);
   await db.delete('turno', where: 'id = ?', whereArgs: [turnoId]);
 }
+
+// busca turno por id
+Future<Map<String, dynamic>?> buscarTurnoPorId(int id) async {
+  final db = await getDb();
+  final result = await db.query('turno', where: 'id = ?', whereArgs: [id], limit: 1);
+  return result.isNotEmpty ? result.first : null;
+}
+
+// atualiza turno finalizado
+Future<void> atualizarTurno(int turnoId, {
+  String? inicioEm,
+  String? fimEm,
+  double? kmInicial,
+  double? kmFinal,
+  double? ganhoBruto,
+  int? totalCorridas,
+}) async {
+  final db = await getDb();
+  final dados = <String, dynamic>{};
+  if (inicioEm != null) dados['inicio_em'] = inicioEm;
+  if (fimEm != null) dados['fim_em'] = fimEm;
+  if (kmInicial != null) dados['km_inicial'] = kmInicial;
+  if (kmFinal != null) dados['km_final'] = kmFinal;
+  if (ganhoBruto != null) dados['ganho_bruto'] = ganhoBruto;
+  if (totalCorridas != null) dados['total_corridas'] = totalCorridas;
+  if (dados.isEmpty) return;
+  await db.update('turno', dados, where: 'id = ?', whereArgs: [turnoId]);
+}
+
+// deleta ganhos por plataforma de um turno para re-inserir
+Future<void> limparGanhosPorPlataforma(int turnoId) async {
+  final db = await getDb();
+  await db.delete('turno_plataforma', where: 'turno_id = ?', whereArgs: [turnoId]);
+}

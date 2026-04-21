@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../database/queries.dart';
 import '../services/calculos.dart';
 import '../services/tema.dart';
+import 'editar_turno_screen.dart';
 
 class RelatorioScreen extends StatefulWidget {
   const RelatorioScreen({super.key});
@@ -94,6 +95,14 @@ class _RelatorioScreenState extends State<RelatorioScreen> {
     carregarDados();
   }
 
+  Future<void> abrirEdicao(Map<String, dynamic> turno) async {
+    final editado = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => EditarTurnoScreen(turno: turno)),
+    );
+    if (editado == true) carregarDados();
+  }
+
   @override
   Widget build(BuildContext context) {
     final ganho = (resumo?['ganho_total'] as num?)?.toDouble() ?? 0;
@@ -173,17 +182,19 @@ class _RelatorioScreenState extends State<RelatorioScreen> {
                 _CardMetrica(label: 'turnos', valor: '$totalTurnos', cor: texto),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
 
             // rentabilidade
-            const SizedBox(height: 16),
             Text('RENTABILIDADE', style: TextStyle(fontSize: 10, color: cinza, letterSpacing: 2)),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: _CardMetrica(label: 'ganho real/hora', valor: ganhoRealPorHora, cor: amarelo, obs: '~30% custos')),
+                Expanded(child: _CardMetrica(
+                  label: 'ganho real/hora', valor: ganhoRealPorHora,
+                  cor: amarelo, obs: '~30% custos')),
                 const SizedBox(width: 8),
-                Expanded(child: _CardMetrica(label: 'ganho por km', valor: ganhoPorKm, cor: amarelo)),
+                Expanded(child: _CardMetrica(
+                  label: 'ganho por km', valor: ganhoPorKm, cor: amarelo)),
               ],
             ),
 
@@ -208,7 +219,8 @@ class _RelatorioScreenState extends State<RelatorioScreen> {
             const SizedBox(height: 24),
             Text('ÚLTIMOS TURNOS', style: TextStyle(fontSize: 10, color: cinza, letterSpacing: 2)),
             const SizedBox(height: 4),
-            Text('Toque longo para excluir', style: TextStyle(fontSize: 11, color: cinza)),
+            Text('Toque para editar • Toque longo para excluir',
+              style: TextStyle(fontSize: 11, color: cinza)),
             const SizedBox(height: 12),
 
             if (turnos.isEmpty)
@@ -216,6 +228,7 @@ class _RelatorioScreenState extends State<RelatorioScreen> {
             else
               ...turnos.map((t) => _TurnoItem(
                 turno: t,
+                onTap: () => abrirEdicao(t),
                 onLongPress: () => confirmarExclusao(t),
               )),
 
@@ -263,9 +276,14 @@ class _CardMetrica extends StatelessWidget {
 
 class _TurnoItem extends StatelessWidget {
   final Map<String, dynamic> turno;
+  final VoidCallback onTap;
   final VoidCallback onLongPress;
 
-  const _TurnoItem({required this.turno, required this.onLongPress});
+  const _TurnoItem({
+    required this.turno,
+    required this.onTap,
+    required this.onLongPress,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -279,9 +297,12 @@ class _TurnoItem extends StatelessWidget {
         ? calcularKmRodados(kmInicial, kmFinal)
         : null;
     final ganho = (turno['ganho_bruto'] as num?)?.toDouble() ?? 0;
-    final data = '${_diaSemana(inicio.weekday)}, ${inicio.day.toString().padLeft(2, '0')}/${inicio.month.toString().padLeft(2, '0')}';
+    final data = '${_diaSemana(inicio.weekday)}, '
+        '${inicio.day.toString().padLeft(2, '0')}/'
+        '${inicio.month.toString().padLeft(2, '0')}';
 
     return GestureDetector(
+      onTap: onTap,
       onLongPress: onLongPress,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
@@ -299,7 +320,8 @@ class _TurnoItem extends StatelessWidget {
               children: [
                 Text(data, style: TextStyle(fontSize: 14, color: Cores.texto(context))),
                 const SizedBox(height: 2),
-                Text(formatarHoras(horas), style: TextStyle(fontSize: 12, color: Cores.cinza(context))),
+                Text(formatarHoras(horas),
+                  style: TextStyle(fontSize: 12, color: Cores.cinza(context))),
                 if (kmRodados != null && kmRodados > 0) ...[
                   const SizedBox(height: 2),
                   Text('${kmRodados.toStringAsFixed(0)} km',
@@ -316,10 +338,14 @@ class _TurnoItem extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(formatarReais(ganho), style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.w800, color: Cores.amarelo(context))),
+                  fontSize: 18, fontWeight: FontWeight.w800,
+                  color: Cores.amarelo(context))),
                 if (kmRodados != null && kmRodados > 0)
                   Text('${formatarReais(ganho / kmRodados)}/km',
                     style: TextStyle(fontSize: 12, color: Cores.cinza(context))),
+                const SizedBox(height: 4),
+                Text('✏️ editar',
+                  style: TextStyle(fontSize: 10, color: Cores.cinza(context))),
               ],
             ),
           ],
