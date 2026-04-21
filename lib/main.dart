@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'services/gps.dart';
 import 'services/tema.dart';
 import 'database/queries.dart';
@@ -34,6 +35,14 @@ class PitBoxApp extends StatelessWidget {
           title: 'PitBox',
           debugShowCheckedModeBanner: false,
           themeMode: modo,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('pt', 'BR'),
+          ],
           theme: ThemeData(
             brightness: Brightness.light,
             scaffoldBackgroundColor: CoresClaro.bg,
